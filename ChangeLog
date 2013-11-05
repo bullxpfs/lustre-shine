@@ -1,3 +1,6 @@
+2013-11-05 The Best <goodguy@bull.net>
+	* Do not optimize
+
 2013-10-30 Aurelien Degremont <aurelien.degremont@cea.fr>
 	* Fix traceback when adding/removing client with update (ticket #169).
 
