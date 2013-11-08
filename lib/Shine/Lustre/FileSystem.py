@@ -35,6 +35,7 @@ from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
 from Shine.Configuration.Globals import Globals
+from Shine.Configuration.Configuration import Configuration
 
 from Shine.Lustre.Actions.Action import ActionGroup, ACT_ERROR
 from Shine.Lustre.Actions.Proxy import FSProxyAction
@@ -576,3 +577,34 @@ class FileSystem:
 
         # Check actions status and return MOUNTED if no error
         return self._check_errors([MOUNTED], None, actions)
+
+    def quota(self):
+        """
+        Handle quota for this filesystem under 2 conditions:
+            - lustre version is >= 2.4
+            - filesystem is not the MGS itself (or MGS not included in FS)
+        """
+        if Globals().lustre_version_is_smaller('2.4'):
+            return EXTERNAL
+
+        if not self.mgt.is_external():
+            return EXTERNAL
+
+        fs_conf = Configuration.load_from_cache(self.fs_name)
+        quota_type = 'none'
+        if fs_conf.has_quota():
+            quota_type = fs_conf.get_quota_type()
+
+        actions = ActionGroup()
+        for type in ('ost', 'mdt'):
+            actions.add(self.mgt.server.handle_quotas(
+                            self,
+                            type=type,
+                            quota_type=quota_type))
+
+        # Run actions
+        actions.launch()
+        self._run_actions()
+
+        # here we use MOUNTED because it is 0, but we shouldn't
+        return self._check_errors([MOUNTED], actions=actions)

@@ -131,6 +131,7 @@ quota: no
 
 # Quota configuration options
 # Describe options for quota support, if quota enabled.
+# In lustre 2.4 and above, only quota_type is relevant.
 #
 # quota_type:     (default is 'ug')
 # quota_iunit:    <number of inodes>

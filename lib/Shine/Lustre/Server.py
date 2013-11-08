@@ -28,6 +28,8 @@ from ClusterShell.Task import NodeSet
 
 from Shine.Lustre import ServerError
 from Shine.Lustre.Actions.Modules import LoadModules, UnloadModules
+from Shine.Lustre.Actions.Quotas import HandleQuotas
+
 from Shine.Lustre.Actions.Tune import Tune
 
 class ServerGroup(object):
@@ -166,3 +168,7 @@ class Server(object):
     def unload_modules(self, **kwargs):
         """Unload all lustre kernel modules."""
         return UnloadModules(self, **kwargs)
+
+    def handle_quotas(self, fs, **kwargs):
+        """Handle quotas on MGS."""
+        return HandleQuotas(self, fs, **kwargs)

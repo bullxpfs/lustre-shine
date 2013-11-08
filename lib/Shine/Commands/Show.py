@@ -97,17 +97,18 @@ class Show(Command):
             if fs_conf.has_quota():
                 quota_info += 'type=%s ' % fs_conf.get_quota_type()
 
-                qiunit = fs_conf.get_quota_iunit() or '[lustre_default]'
-                quota_info += 'iunit=%s ' % qiunit
+                if Globals().lustre_version_is_smaller('2.4'):
+                    qiunit = fs_conf.get_quota_iunit() or '[lustre_default]'
+                    quota_info += 'iunit=%s ' % qiunit
 
-                qbunit = fs_conf.get_quota_bunit() or '[lustre_default]'
-                quota_info += 'bunit=%s ' % qbunit
+                    qbunit = fs_conf.get_quota_bunit() or '[lustre_default]'
+                    quota_info += 'bunit=%s ' % qbunit
 
-                qitune = fs_conf.get_quota_itune() or '[lustre_default]'
-                quota_info += 'itune=%s ' % qitune
+                    qitune = fs_conf.get_quota_itune() or '[lustre_default]'
+                    quota_info += 'itune=%s ' % qitune
 
-                qbtune = fs_conf.get_quota_btune() or '[lustre_default]'
-                quota_info += 'btune=%s ' % qbtune
+                    qbtune = fs_conf.get_quota_btune() or '[lustre_default]'
+                    quota_info += 'btune=%s ' % qbtune
             else:
                 quota_info = 'not activated'
 

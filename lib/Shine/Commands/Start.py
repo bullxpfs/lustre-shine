@@ -97,6 +97,16 @@ class Start(FSTargetLiveCommand):
             if status == MOUNTED:
                 if vlevel > 1:
                     print "Filesystem tuning applied on %s" % comps.servers()
+
+                # Targets are started, tuning is applied
+                # Last task is to handle quotas settings
+                status = fs.quota()
+                if status == MOUNTED:
+                    if vlevel > 1:
+                        print "Filesystem quotas applied successfully"
+                elif status == TARGET_ERROR:
+                    print "ERROR: Quota handling failed"
+                    rc = RC_RUNTIME_ERROR
             elif status == TARGET_ERROR:
                 print "ERROR: Filesystem tuning failed"
                 rc = RC_RUNTIME_ERROR
