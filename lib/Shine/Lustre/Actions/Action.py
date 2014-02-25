@@ -224,6 +224,10 @@ class ActionGroup(CommonAction):
         """Number or group members."""
         return len(self._members)
 
+    def __iter__(self):
+        """Iterate over group members."""
+        return iter(self._members)
+
     def add(self, action):
         """Add an action to this group."""
         self._members.add(action)
@@ -252,6 +256,8 @@ class FSAction(CommonAction):
 
     # full_check() should also check mountdata?
     CHECK_MOUNTDATA = True
+
+    NEEDED_MODULES = []
 
     def __init__(self, comp, task=task_self(), **kwargs):
         CommonAction.__init__(self, task)
@@ -378,3 +384,10 @@ class FSAction(CommonAction):
             result = ErrorResult(worker.read(), self.duration, worker.retcode())
             self.comp.action_failed(self.NAME, result)
             self.set_status(ACT_ERROR)
+
+    def needed_modules(self):
+        """
+        Some modules may need to be loaded before this action is performed.
+        The module list depends on the action and the component.
+        """
+        return self.NEEDED_MODULES
