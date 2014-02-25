@@ -72,3 +72,6 @@ class StartClient(FSAction):
         command.append(mount_path)
 
         return command
+
+    def needed_modules(self):
+        return ['lustre']

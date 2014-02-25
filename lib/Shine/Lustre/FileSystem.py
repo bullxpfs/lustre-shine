@@ -404,6 +404,7 @@ class FileSystem:
         first_comps = None
         last_comps = None
         localsrv = None
+        modules = set()
 
         if groupby:
             iterable = comps.groupby(attr=groupby, reverse=reverse)
@@ -436,13 +437,30 @@ class FileSystem:
                 # Keep track of last comp group
                 last_comps = compgrp
 
+                # Build module loading list, if needed
+                if need_load:
+                    for comp_action in compgrp._members:
+                        modules.update(comp_action.needed_modules())
+
             if len(proxygrp) > 0:
                 subparts[-1].add(proxygrp)
 
 
         # Add module loading, if needed.
         if need_load and first_comps is not None:
-            first_comps.depends_on(localsrv.load_modules())
+            modgrp = ActionGroup()
+            modlist = []
+            for module in modules:
+                modlist.append(localsrv.load_modules(modname=module))
+                modgrp.add(modlist[-1])
+
+            # Serialize modules loading actions
+            for act1, act2 in zip(modlist, modlist[1:]):
+                act2.depends_on(act1)
+
+            if len(modgrp) > 0:
+                first_comps.depends_on(modgrp)
+
         # Add module unloading to last component group, if needed.
         if need_unload and last_comps is not None:
             localsrv.unload_modules().depends_on(last_comps)
@@ -468,7 +486,7 @@ class FileSystem:
     def tunefs(self, comps=None, **kwargs):
         """Modify component option set at format."""
         comps = (comps or self.components).managed(supports='tunefs')
-        actions = self._prepare('tunefs', comps, **kwargs)
+        actions = self._prepare('tunefs', comps, need_load=True, **kwargs)
         actions.launch()
         self._run_actions()
 
@@ -479,7 +497,7 @@ class FileSystem:
     def fsck(self, comps=None, **kwargs):
         """Check component filesystem coherency."""
         comps = (comps or self.components).managed(supports='fsck')
-        actions = self._prepare('fsck', comps, **kwargs)
+        actions = self._prepare('fsck', comps, need_load=True, **kwargs)
         actions.launch()
         self._run_actions()
         # Check for errors and return OFFLINE or error code

@@ -181,6 +181,9 @@ class Tunefs(CommonFormat):
 
         return command
 
+    def needed_modules(self):
+        return ['ldiskfs']
+
 
 class Format(CommonFormat):
     """

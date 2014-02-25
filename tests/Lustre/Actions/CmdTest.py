@@ -43,6 +43,12 @@ class ActionsTest(unittest.TestCase):
     # Router
     #
 
+    def test_start_router_modules(self):
+        """test start router modules"""
+        rtr = self.fs.new_router(self.srv1)
+        action = StartRouter(rtr)
+        self.assertEquals(sorted(action.needed_modules()), [])
+
     def test_start_router(self):
         """test command line start router"""
         rtr = self.fs.new_router(self.srv1)
@@ -58,6 +64,13 @@ class ActionsTest(unittest.TestCase):
     #
     # Client
     #
+
+    def test_start_client_modules(self):
+        """test start client modules"""
+        self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        client = self.fs.new_client(self.srv1, "/foo")
+        action = StartClient(client)
+        self.assertEquals(sorted(action.needed_modules()), ['lustre'])
 
     def test_start_client_simple(self):
         """test command line start client (mgs one nid)"""
@@ -156,6 +169,12 @@ class ActionsTest(unittest.TestCase):
     # Target
     #
 
+    def test_fsck_modules(self):
+        """test fsck modules"""
+        tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        action = Fsck(tgt)
+        self.assertEquals(sorted(action.needed_modules()), ['ldiskfs'])
+
     def test_fsck(self):
         """test command line fsck"""
         tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
@@ -176,6 +195,27 @@ class ActionsTest(unittest.TestCase):
 
     # XXX: All full_check() calls should be replaced by a real call to the
     # method dedicated action for the Target.
+
+    def test_start_target_modules_v2_1x(self):
+        Globals().replace('lustre_version', '2.1')
+        tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        action = StartTarget(tgt)
+        self.assertEquals(sorted(action.needed_modules()),
+                          ['ldiskfs', 'lustre'])
+
+    def test_start_target_modules_v2_4x(self):
+        Globals().replace('lustre_version', '2.4')
+        tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        action = StartTarget(tgt)
+        self.assertEquals(sorted(action.needed_modules()),
+                          ['fsfilt_ldiskfs', 'lustre'])
+
+    def test_start_target_modules_v2_5x(self):
+        Globals().replace('lustre_version', '2.5')
+        tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        action = StartTarget(tgt)
+        self.assertEquals(sorted(action.needed_modules()),
+                          ['ldiskfs', 'lustre'])
 
     def test_start_target(self):
         """test command line start target"""
@@ -526,6 +566,11 @@ class ActionsTest(unittest.TestCase):
         """Helper method to check cmdline for tunefs actions"""
         self.check_cmd(action,
                  'tunefs.lustre --erase-params --quiet ' + cmdline)
+
+    def test_tunefs_modules(self):
+        tgt = self.fs.new_target(self.srv1, 'mgt', 0, '/dev/root')
+        action = Tunefs(tgt, writeconf=True)
+        self.assertEquals(sorted(action.needed_modules()), ['ldiskfs'])
 
     def test_tunefs_mgs_writeconf(self):
         """test command line tunefs writeconf (MGT)"""

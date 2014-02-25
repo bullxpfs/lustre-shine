@@ -146,3 +146,6 @@ class Fsck(FSAction):
             result = ErrorResult(msg, self.duration, worker.retcode())
             self.comp.action_failed('fsck', result)
             self.set_status(ACT_ERROR)
+
+    def needed_modules(self):
+        return ['ldiskfs']
