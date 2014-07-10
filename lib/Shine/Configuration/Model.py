@@ -188,6 +188,14 @@ class Target(ModelFile):
 
         return matching
 
+    def changemap(self):
+        return {'ha_node': ['start', 'tunefs'],
+                'network': ['start', 'tunefs'],
+                'node':    ['start', 'tunefs'],
+                'dev':     ['start', 'tunefs'],
+                'tag':     ['copyconf'],
+                'group':   ['copyconf']}
+
 class Router(ModelFile):
     """Define 'router' in model file: nodes=<NODES>"""
 
@@ -211,3 +219,6 @@ class Client(ModelFile):
     def key(self):
         """A unique client is identified by its node and mount path."""
         return (self.get('node'), self.get('mount_path'))
+
+    def changemap(self):
+        return {'mount_options': ['mount']}

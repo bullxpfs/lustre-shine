@@ -42,10 +42,15 @@ You can load and save from disk.
 import re
 import copy
 
-from ClusterShell.NodeSet import RangeSet
+from ClusterShell.NodeSet import NodeSet, RangeSet
 
 class ModelFileValueError(Exception):
     """Raise when a bad value is used when adding a data or parsing a file."""
+
+class ForbiddenChangeError(Exception):
+    """Error indicating a forbidden change was detected in an update."""
+    def __init__(self, forbiddendict):
+        self.forbiddendict = forbiddendict
 
 class SimpleElement(object):
     """
@@ -307,14 +312,18 @@ class MultipleElement(object):
                 removed.elements().append(elem.copy())
 
         # Detect modified element in other.
-        # Add the new one from other
-        changed = self.emptycopy()
+        # Fill the 'changed' data structure.
+        changed = ChangedElement()
         for key, elem in localdict.items():
             if key in otherdict:
                 otherelem = otherdict[key]
                 e_added, e_changed, e_removed = elem.diff(otherelem)
                 if e_added or e_changed or e_removed:
+                    changed.elements().append(elem.copy())
                     changed.elements().append(otherelem.copy())
+                    changed.elements().append(e_added.copy())
+                    changed.elements().append(e_changed.copy())
+                    changed.elements().append(e_removed.copy())
 
         return added, changed, removed
 
@@ -384,7 +393,6 @@ class MultipleElement(object):
     def clear(self):
         """Remove all elements from this MultipleElement."""
         self._elements = []
-
 
 
 class ModelFile(object):
@@ -624,3 +632,48 @@ class ModelFile(object):
             modelfd.write("%s\n" % header)
         modelfd.write("%s\n" % self)
         modelfd.close()
+
+
+class ChangedElement(MultipleElement):
+    """
+    Data structure used to track changed elements.
+    """
+
+    def __init__(self, orig_elem=None):
+        MultipleElement.__init__(self, SimpleElement(check=None))
+
+    def iteritems(self):
+        elems = [tuple(self.elements()[i:i+5]) \
+                 for i in range(0, len(self), 5)]
+
+        for elem in elems:
+            yield elem
+
+    def validate(self, actions, cls=None, type=None):
+        forbiddendict = {}
+
+        for (old, new, add, chg, rem) in self.iteritems():
+            chgset = NodeSet()
+            for change in add, chg, rem:
+                chgset.updaten([item for item in change.iterkeys()])
+
+            for key in chgset:
+                if key not in old.changemap():
+                    forbiddendict.setdefault(key, []).append(old.__str__())
+                else:
+                    if 'mount' in old.changemap()[key]:
+                        actions.setdefault('unmount', []).append(cls(old))
+                        actions.setdefault('mount', []).append(cls(new))
+
+                    if 'start' in old.changemap()[key]:
+                        actions.setdefault('stop', []).append(cls(type, old))
+                        actions.setdefault('start', []).append(cls(type, new))
+
+                    if 'tunefs' in old.changemap()[key]:
+                        actions.setdefault('writeconf', True)
+
+                    if 'copyconf' in old.changemap()[key]:
+                        actions.setdefault('copyconf', True)
+
+        if forbiddendict:
+            raise ForbiddenChangeError(forbiddendict)

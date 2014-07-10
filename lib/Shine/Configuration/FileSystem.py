@@ -23,6 +23,7 @@ import os
 
 from Shine.Configuration.Globals import Globals
 from Shine.Configuration.Model import Model
+from Shine.Configuration.ModelFile import ChangedElement, ForbiddenChangeError
 from Shine.Configuration.Exceptions import ConfigInvalidFileSystem, \
                                            ConfigDeviceNotFoundError, \
                                            ConfigException
@@ -297,7 +298,7 @@ class FileSystem(object):
 
                 except KeyError, error:
                     raise ConfigInvalidFileSystem(self, \
-                            "Index %d for %s used twice." % \
+                            "Index %s for %s used twice." % \
                             (str(error), target))
 
             # Support for backend None
@@ -416,13 +417,15 @@ class FileSystem(object):
                                  in added.elements('client')]
 
         if 'client' in changed:
-            actions.setdefault('unmount', [])
-            actions.setdefault('mount', [])
-            # XXX: Not exact, the old object should be added to unmount list
-            actions['unmount'] += [Clients(elem) for elem
-                                   in changed.elements('client')]
-            actions['mount'] += [Clients(elem) for elem
-                                 in changed.elements('client')]
+            try:
+                changed.elements('client').validate(actions, cls=Clients)
+            except ForbiddenChangeError, error:
+                errormsg = "Forbidden changes were detected:\n"
+                for key, value in error.forbiddendict.iteritems():
+                    for cli in value:
+                        client = "   - %s ( %s)\n" % (cli, key)
+                        errormsg += "%s" % (", ".join([client]))
+                raise ConfigException(errormsg)
 
         # Router has changed
         if 'router' in removed:
@@ -447,15 +450,15 @@ class FileSystem(object):
                 actions.setdefault('start', []).extend(
                         [Target(tgt, elem) for elem in added.elements(tgt)])
             if tgt in changed:
-                for elem in changed.elements(tgt):
-                    # XXX: Not exact, the old object should be added to stop
-                    # list
-                    actions.setdefault('stop', []).append(Target(tgt, elem))
-                    actions.setdefault('start', []).append(Target(tgt, elem))
-                    # - Possible changes -
-                    # ha_node, network: stop, writeconf, start
-                    # jdev: stop, fsck, tune2fs, start
-                    # tag, group: <nothing>
+                try:
+                    changed.elements(tgt).validate(actions, cls=Target, type=tgt)
+                except ForbiddenChangeError, error:
+                    errormsg = "Forbidden changes were detected:\n"
+                    for key, value in error.forbiddendict.iteritems():
+                        for tgt in value:
+                            target = "    - %s (%s)\n" % (tgt, key)
+                            errormsg += target
+                    raise ConfigException(errormsg)
 
         # If some actions is required, we need to update config files.
         if len(actions) > 0:
