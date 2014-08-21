@@ -2,6 +2,9 @@
 	* Fix error message format issue when using the same index twice
 	(ticket #181)
 
+2014-06-10 Florent Thery <florent.thery@bull.net>
+	* Trigger different actions depending on which option changed (ticket #180)
+
 2014-06-10 Aurelien Degremont <aurelien.degremont@cea.fr>
 	* Correctly detect target updates in model file (ticket #180)
 

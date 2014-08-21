@@ -129,8 +129,12 @@ ost: node=foo1 dev=/dev/sdc jdev=/dev/sdd """)
         added, changed, removed = model.diff(new_m)
         self.assertEqual(len(added), 0)
         self.assertEqual(str(removed), "ost:node=foo1 dev=/dev/sda")
-        self.assertEqual(str(changed),
-                                    "ost:node=foo1 dev=/dev/sdc jdev=/dev/sdd")
+        self.assertEqual([str(value) for key, value in changed.iteritems()],
+                         ['node=foo1 dev=/dev/sdc mode=external',
+                          'node=foo1 dev=/dev/sdc jdev=/dev/sdd',
+                          'jdev=/dev/sdd',
+                          '',
+                          'mode=external'])
 
     def test_diff_client(self):
         """check diff detects updated clients."""
@@ -147,4 +151,9 @@ client: node=foo1 mount_options=ro""")
         added, changed, removed = model.diff(new_m)
         self.assertEqual(len(added), 0)
         self.assertEqual(len(removed), 0)
-        self.assertEqual(str(changed), "client:node=foo1 mount_options=ro")
+        self.assertEqual([str(value) for key, value in changed.iteritems()],
+                         ['node=foo1',
+                          'node=foo1 mount_options=ro',
+                          'mount_options=ro',
+                          '',
+                          ''])

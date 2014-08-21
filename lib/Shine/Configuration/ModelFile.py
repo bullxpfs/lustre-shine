@@ -47,6 +47,11 @@ from ClusterShell.NodeSet import RangeSet
 class ModelFileValueError(Exception):
     """Raise when a bad value is used when adding a data or parsing a file."""
 
+class ForbiddenChangeError(Exception):
+    """Error indicating a forbidden change was detected in an update."""
+    def __init__(self, forbiddendict):
+        self.forbiddendict = forbiddendict
+
 class SimpleElement(object):
     """
     A data storing class for ModelFile.
@@ -307,14 +312,18 @@ class MultipleElement(object):
                 removed.elements().append(elem.copy())
 
         # Detect modified element in other.
-        # Add the new one from other
-        changed = self.emptycopy()
+        # Fill the 'changed' data structure.
+        changed = ChangedElement()
         for key, elem in localdict.items():
             if key in otherdict:
                 otherelem = otherdict[key]
                 e_added, e_changed, e_removed = elem.diff(otherelem)
                 if e_added or e_changed or e_removed:
-                    changed.elements().append(otherelem.copy())
+                    changed.elements()['old'] = elem.copy()
+                    changed.elements()['new'] = otherelem.copy()
+                    changed.elements()['added'] = e_added.copy()
+                    changed.elements()['changed'] = e_changed.copy()
+                    changed.elements()['removed'] = e_removed.copy()
 
         return added, changed, removed
 
@@ -384,7 +393,6 @@ class MultipleElement(object):
     def clear(self):
         """Remove all elements from this MultipleElement."""
         self._elements = []
-
 
 
 class ModelFile(object):
@@ -624,3 +632,76 @@ class ModelFile(object):
             modelfd.write("%s\n" % header)
         modelfd.write("%s\n" % self)
         modelfd.close()
+
+
+class ChangedElement(ModelFile):
+    """
+    Data structure used to track changed elements.
+    """
+
+    def __init__(self, sep='=', linesep=' '):
+        ModelFile.__init__(self, sep, linesep)
+        self.add_custom('old', ModelFile())
+        self.add_custom('new', ModelFile())
+        self.add_custom('added', ModelFile())
+        self.add_custom('changed', ModelFile())
+        self.add_custom('removed', ModelFile())
+
+
+    def get(self, key='new', default=None):
+        """Return data associated to element pointed by key.
+
+        Here, default key is the new element.
+        """
+        return super(ChangedElement, self).get(key=key, default=default)
+
+    #
+    # The 3 following methods take a key as argument,
+    # used to select which part of the object to return:
+    #     - 'old', 'new', 'added', 'removed', 'changed':
+    #         -> return from the corresponding ModelFile
+    #     - 'mod':
+    #         -> return from the 'added', 'removed', 'changed' ModelFiles
+    #     - 'myself':
+    #         -> return from the ChangeElement itself
+    #     - default is 'new'.
+    #
+    def iterkeys(self, key='new'):
+        """Iterate over keys."""
+        if key in ('old', 'new', 'added', 'changed', 'removed'):
+            for ikey in self.get(key, default=ModelFile()).iterkeys():
+                yield ikey
+        elif key == 'mod':
+            for okey in ('added', 'changed', 'removed'):
+                for ikey in self.get(okey, default=ModelFile()).iterkeys():
+                    yield ikey
+        elif key == 'myself':
+            for ikey in super(ChangedElement, self).iterkeys():
+                yield ikey
+
+    def iteritems(self, key='new'):
+        """Iterate over the keys and non-empty values."""
+        if key in ('old', 'new', 'added', 'changed', 'removed'):
+            for elem in self.get(key, default=ModelFile()).iteritems():
+                yield elem
+        elif key == 'mod':
+            for okey in ('added', 'changed', 'removed'):
+                for elem in self.get(okey, default=ModelFile()).iteritems():
+                    yield elem
+        elif key == 'myself':
+            for elem in super(ChangedElement, self).iteritems():
+                yield elem
+
+    def as_dict(self, key='new'):
+        """Return a dict containing all elements and content using only Python
+        built-in objects."""
+        if key in ('old', 'new', 'added', 'changed', 'removed'):
+            return self.get(key).as_dict()
+        elif key == 'mod':
+            retdict = dict()
+            for ikey in ('added', 'changed', 'removed'):
+                retdict.update(self.get(ikey).as_dict())
+            return retdict
+        elif key == 'myself':
+            return dict([(ikey, self._elements[ikey].as_dict())
+                for ikey in super(ChangedElement, self).iterkeys()])

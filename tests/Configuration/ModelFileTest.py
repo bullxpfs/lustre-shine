@@ -10,7 +10,8 @@ import unittest
 from Utils import makeTempFile, makeTempFilename
 from ClusterShell.NodeSet import NodeSet
 from Shine.Configuration.ModelFile import ModelFile, SimpleElement, \
-                                          MultipleElement, ModelFileValueError
+                                          MultipleElement, ModelFileValueError, \
+                                          ChangedElement
 
 
 class SimpleElementTest(unittest.TestCase):
@@ -268,7 +269,8 @@ class MultipleElementTest(unittest.TestCase):
         added, changed, removed = elem.diff(other)
         self.assertEqual(added.get(), None)
         self.assertEqual(removed.get(), None)
-        self.assertEqual(changed.get(), [6])
+        self.assertEqual([str(elem) for elem in changed.elements()],
+                         ['7', '6', 'None', '6', 'None'])
 
     def test_diff_key_model_file(self):
         """MultipleElement diff method with ModelFile elements with a specific key"""
@@ -298,7 +300,9 @@ class MultipleElementTest(unittest.TestCase):
         added, changed, removed = elem.diff(other)
         self.assertEqual(added.get(), None)
         self.assertEqual(removed.get(), None)
-        self.assertEqual(changed.as_dict(), [{'node':'foo', 'data':'else'}])
+        self.assertEqual([str(elem) for elem in changed.elements()],
+                         ['node=foo data=bar', 'node=foo data=else',
+                          '', 'data=else', ''])
 
 
 class ModelFileTest(unittest.TestCase):
@@ -725,3 +729,38 @@ bar: 2""")
         # Compare the two files. They should have no difference
         added, changed, removed = model.diff(model2)
         self.assertTrue(len(changed) == len(added) == len(removed) == 0)
+
+class ChangedElementTest(unittest.TestCase):
+
+    def testBase(self):
+        """MultipleElement base methods"""
+
+        elem = ChangedElement()
+
+        # Default
+        self.assertEqual(elem.get([]), [])
+
+        # First add()
+        elem.elements().append("1")
+        elem.elements().append("2")
+        elem.elements().append("3")
+        elem.elements().append("4")
+        elem.elements().append("5")
+        self.assertEqual(elem.elements(), ["1", "2", "3", "4", "5"])
+
+        self.assertEqual([item for item in elem.iteritems()],
+                         [("1", "2", "3", "4", "5")])
+
+        # Second add()
+        elem.elements().append("6")
+        elem.elements().append("7")
+        elem.elements().append("8")
+        elem.elements().append(None)
+        elem.elements().append("10")
+        self.assertEqual(elem.elements(),
+                         ["1", "2", "3", "4", "5", "6", "7", "8", None, "10"])
+
+        self.assertEqual([item for item in elem.iteritems()],
+                         [("1", "2", "3", "4", "5"),
+                          ("6", "7", "8", None, "10")])
+

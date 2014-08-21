@@ -21,8 +21,11 @@
 import copy
 import os
 
+from ClusterShell.NodeSet import NodeSet
+
 from Shine.Configuration.Globals import Globals
 from Shine.Configuration.Model import Model
+from Shine.Configuration.ModelFile import ChangedElement, ForbiddenChangeError
 from Shine.Configuration.Exceptions import ConfigInvalidFileSystem, \
                                            ConfigDeviceNotFoundError, \
                                            ConfigException
@@ -192,6 +195,37 @@ class FileSystem(object):
         fsconf.xmf_path = conf_file
         return fsconf
 
+
+    @classmethod
+    def validate_change(cls, elem, actions, obj=None, type=None):
+        """Check changes requested by update are legal."""
+        forbiddendict = {}
+        old = elem.get('old')
+        new = elem.get('new')
+
+        chgset = set()
+        [chgset.update(set([change])) for change in elem.iterkeys('mod')]
+
+        for key in chgset:
+            if key not in old.changemap():
+                forbiddendict.setdefault(key, []).append(old.__str__())
+            else:
+                if 'mount' in old.changemap()[key]:
+                    actions.setdefault('unmount', []).append(obj(old))
+                    actions.setdefault('mount', []).append(obj(new))
+
+                if 'start' in old.changemap()[key]:
+                    actions.setdefault('stop', []).append(obj(type, old))
+                    actions.setdefault('start', []).append(obj(type, new))
+
+                if 'tunefs' in old.changemap()[key]:
+                    actions.setdefault('writeconf', True)
+
+                if 'copyconf' in old.changemap()[key]:
+                    actions.setdefault('copyconf', True)
+
+        if forbiddendict:
+            raise ForbiddenChangeError(forbiddendict)
 
     def _start_backend(self):
         """
@@ -416,13 +450,16 @@ class FileSystem(object):
                                  in added.elements('client')]
 
         if 'client' in changed:
-            actions.setdefault('unmount', [])
-            actions.setdefault('mount', [])
-            # XXX: Not exact, the old object should be added to unmount list
-            actions['unmount'] += [Clients(elem) for elem
-                                   in changed.elements('client')]
-            actions['mount'] += [Clients(elem) for elem
-                                 in changed.elements('client')]
+            try:
+                FileSystem.validate_change(changed.elements('client'),
+                                           actions, obj=Clients)
+            except ForbiddenChangeError, error:
+                errormsg = "Forbidden changes were detected:\n"
+                for key, value in error.forbiddendict.iteritems():
+                    for cli in value:
+                        client = "   - %s ( %s)\n" % (cli, key)
+                        errormsg += "%s" % (", ".join([client]))
+                raise ConfigException(errormsg)
 
         # Router has changed
         if 'router' in removed:
@@ -447,15 +484,16 @@ class FileSystem(object):
                 actions.setdefault('start', []).extend(
                         [Target(tgt, elem) for elem in added.elements(tgt)])
             if tgt in changed:
-                for elem in changed.elements(tgt):
-                    # XXX: Not exact, the old object should be added to stop
-                    # list
-                    actions.setdefault('stop', []).append(Target(tgt, elem))
-                    actions.setdefault('start', []).append(Target(tgt, elem))
-                    # - Possible changes -
-                    # ha_node, network: stop, writeconf, start
-                    # jdev: stop, fsck, tune2fs, start
-                    # tag, group: <nothing>
+                try:
+                    FileSystem.validate_change(changed.elements(tgt), actions,
+                                               obj=Target, type=tgt)
+                except ForbiddenChangeError, error:
+                    errormsg = "Forbidden changes were detected:\n"
+                    for key, value in error.forbiddendict.iteritems():
+                        for tgt in value:
+                            target = "    - %s (%s)\n" % (tgt, key)
+                            errormsg += target
+                    raise ConfigException(errormsg)
 
         # If some actions is required, we need to update config files.
         if len(actions) > 0:
