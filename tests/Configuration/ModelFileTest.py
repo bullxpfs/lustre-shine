@@ -10,7 +10,8 @@ import unittest
 from Utils import makeTempFile, makeTempFilename
 from ClusterShell.NodeSet import NodeSet
 from Shine.Configuration.ModelFile import ModelFile, SimpleElement, \
-                                          MultipleElement, ModelFileValueError
+                                          MultipleElement, ModelFileValueError, \
+                                          ChangedElement
 
 
 class SimpleElementTest(unittest.TestCase):
@@ -268,7 +269,20 @@ class MultipleElementTest(unittest.TestCase):
         added, changed, removed = elem.diff(other)
         self.assertEqual(added.get(), None)
         self.assertEqual(removed.get(), None)
-        self.assertEqual(changed.get(), [6])
+        self.assertEqual(changed.elements()[0].get('old').get(), 7)
+        self.assertEqual(changed.elements()[0].get('new').get(), 6)
+        self.assertEqual(changed.elements()[0].get('added').get(), None)
+        self.assertEqual(changed.elements()[0].get('changed').get(), 6)
+        self.assertEqual(changed.elements()[0].get('removed').get(), None)
+
+        # Check changed element with simple element comparison
+        self.assertEqual(list(changed.elements()[0].iterkeys()), [])
+        self.assertEqual(list(changed.elements()[0].iterkeys('new')), [])
+        self.assertEqual(list(changed.elements()[0].iterkeys('old')), [])
+        self.assertEqual(list(changed.elements()[0].iterkeys('changed')), [])
+        self.assertEqual(list(changed.elements()[0].iterkeys('removed')), [])
+        self.assertEqual(list(changed.elements()[0].iterkeys('myself')),
+                         ['new', 'old', 'changed'])
 
     def test_diff_key_model_file(self):
         """MultipleElement diff method with ModelFile elements with a specific key"""
@@ -298,7 +312,14 @@ class MultipleElementTest(unittest.TestCase):
         added, changed, removed = elem.diff(other)
         self.assertEqual(added.get(), None)
         self.assertEqual(removed.get(), None)
-        self.assertEqual(changed.as_dict(), [{'node':'foo', 'data':'else'}])
+        self.assertEqual(changed.elements()[0].as_dict('old'),
+                         {'node':'foo', 'data':'bar'})
+        self.assertEqual(changed.elements()[0].as_dict('new'),
+                         {'node':'foo', 'data':'else'})
+        self.assertEqual(changed.elements()[0].as_dict('added'), {})
+        self.assertEqual(changed.elements()[0].as_dict('changed'),
+                         {'data':'else'})
+        self.assertEqual(changed.elements()[0].as_dict('removed'), {})
 
 
 class ModelFileTest(unittest.TestCase):
@@ -725,3 +746,67 @@ bar: 2""")
         # Compare the two files. They should have no difference
         added, changed, removed = model.diff(model2)
         self.assertTrue(len(changed) == len(added) == len(removed) == 0)
+
+class ChangedElementTest(unittest.TestCase):
+
+    def test_base(self):
+        """ChangedElement base methods"""
+
+        class MyElement(ModelFile):
+            def __init__(self, sep='=', linesep=" "):
+                ModelFile.__init__(self, sep, linesep)
+                self.add_element('node', check='string')
+                self.add_element('data', check='string')
+            def key(self):
+                return self.get('node')
+
+        elem = MyElement()
+        elem.parse("node=foo data=bar")
+
+        other = MyElement()
+        other.parse("node=foo data=bar2")
+
+        chg = MyElement()
+        chg.parse("data=bar2")
+
+        changed = ChangedElement(elem.emptycopy())
+        changed.elements()['old'] = elem.copy()
+        changed.elements()['new'] = other.copy()
+        changed.elements()['changed'] = chg.copy()
+
+        # as_dict() method
+        self.assertEqual(changed.as_dict(), {'node': 'foo', 'data': 'bar2'})
+        self.assertEqual(changed.as_dict('new'),
+                         {'node': 'foo', 'data': 'bar2'})
+        self.assertEqual(changed.as_dict('old'), {'node': 'foo', 'data': 'bar'})
+        self.assertEqual(changed.as_dict('changed'), {'data': 'bar2'})
+        self.assertEqual(changed.as_dict('mod'), {'data': 'bar2'})
+        self.assertEqual(changed.as_dict('myself'),
+                         {'new': {'node': 'foo', 'data': 'bar2'},
+                          'changed': {'data': 'bar2'},
+                          'old': {'node': 'foo', 'data': 'bar'}})
+
+        # iterkeys() method
+        self.assertEqual(list(changed.iterkeys()), ['node', 'data'])
+        self.assertEqual(list(changed.iterkeys('new')), ['node', 'data'])
+        self.assertEqual(list(changed.iterkeys('old')), ['node', 'data'])
+        self.assertEqual(list(changed.iterkeys('changed')), ['data'])
+        self.assertEqual(list(changed.iterkeys('mod')), ['data'])
+        self.assertEqual(list(changed.iterkeys('myself')),
+                         ['new', 'old', 'changed'])
+
+        # iteritems() method
+        self.assertEqual(list(changed.iteritems()),
+                         [('node', 'foo'), ('data', 'bar2')])
+        self.assertEqual(list(changed.iteritems('new')),
+                         [('node', 'foo'), ('data', 'bar2')])
+        self.assertEqual(list(changed.iteritems('old')),
+                         [('node', 'foo'), ('data', 'bar')])
+        self.assertEqual(list(changed.iteritems('changed')),
+                         [('data', 'bar2')])
+        self.assertEqual(list(changed.iteritems('mod')),
+                         [('data', 'bar2')])
+        self.assertEqual(list(changed.iteritems('myself')),
+                         [('new', 'node'), ('new', 'data'), ('old', 'node'),
+                          ('old', 'data'), ('changed', 'data')])
+
