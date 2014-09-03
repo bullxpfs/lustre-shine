@@ -220,3 +220,16 @@ class ComponentGroupTest(unittest.TestCase):
         self.assertEqual(len(results), 2)
         self.assertTrue([srv1, [comp1, comp3]] in results)
         self.assertTrue([srv2, [comp2, comp4]] in results)
+
+    def test_managed_active(self):
+        """test ComponentGroup.managed() with active option"""
+        fs = FileSystem('active')
+        srv = Server('foo1', ['foo1@tcp'])
+        tgt1 = fs.new_target(srv, 'ost', 0, '/dev/null')
+        tgt2 = fs.new_target(srv, 'ost', 1, '/dev/null', active='no')
+        tgt3 = fs.new_target(srv, 'ost', 2, '/dev/null', active='nocreate')
+        tgt4 = fs.new_target(srv, 'ost', 3, '/dev/null', active='no', mode='external')
+        self.assertEqual(len(fs.components.managed()), 2)
+        self.assertEqual(str(fs.components.managed()), 'active-OST[0000,0002]')
+        self.assertEqual(len(fs.components.managed(inactive=True)), 4)
+        self.assertEqual(str(fs.components.managed(inactive=True)), 'active-OST[0000-0003]')
