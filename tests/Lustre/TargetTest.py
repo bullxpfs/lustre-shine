@@ -89,3 +89,15 @@ class TargetTest(unittest.TestCase):
         # Could not switch if more than one node matches
         self.assertRaises(ComponentError, Target.failover, tgt,
                           NodeSet("foo[2,3]"))
+
+    def test_active(self):
+        """test active option"""
+        fs = FileSystem('active')
+        srv = Server('foo1', ['foo1@tcp'])
+        tgt1 = fs.new_target(srv, 'ost', 0, '/dev/null')
+        tgt2 = fs.new_target(srv, 'ost', 1, '/dev/null', active='no')
+        tgt3 = fs.new_target(srv, 'ost', 2, '/dev/null', active='nocreate')
+        self.assertEqual(len(fs.components.managed()), 2)
+        self.assertEqual(str(fs.components.managed()), 'active-OST[0000,0002]')
+        self.assertEqual(len(fs.components.managed(inactive=True)), 3)
+        self.assertEqual(str(fs.components.managed(inactive=True)), 'active-OST[0000-0002]')
