@@ -40,6 +40,7 @@ from Shine.Commands.Base.FSEventHandler import FSGlobalEventHandler, \
 from Shine.Lustre.FileSystem import MOUNTED, RECOVERING, EXTERNAL, OFFLINE, \
                                     TARGET_ERROR, CLIENT_ERROR, RUNTIME_ERROR
 
+from Shine.Lustre.Server import Server
 
 class Start(FSTargetLiveCommand):
     """
@@ -90,21 +91,27 @@ class Start(FSTargetLiveCommand):
         rc = self.fs_status_to_rc(status)
 
         if rc == RC_OK:
-            if vlevel > 0:
-                print "Start successful."
-            tuning = Tune.get_tuning(fs_conf, fs.components)
-            status = fs.tune(tuning, comps=comps)
-            if status == MOUNTED:
+            if self.has_local_flag() or \
+               Server.hostname_short() in comps.servers():
+                key = lambda c: Server.hostname_short() in c.server.hostname
+                tunecomps = comps.filter(key=key)
+
+                # Apply tuning after successful mount
+                tuning = Tune.get_tuning(fs_conf, fs.components)
+                status = fs.tune(tuning, comps=tunecomps)
+                if status == MOUNTED:
+                    rc == RC_OK
+                elif status == TARGET_ERROR:
+                    print "ERROR: Filesystem tuning failed"
+                    rc = RC_RUNTIME_ERROR
+                else:
+                    rc = RC_RUNTIME_ERROR
+
+            if rc == RC_OK:
+                if vlevel > 0:
+                    print "Start successful."
                 if vlevel > 1:
                     print "Filesystem tuning applied on %s" % comps.servers()
-            elif status == TARGET_ERROR:
-                print "ERROR: Filesystem tuning failed"
-                rc = RC_RUNTIME_ERROR
-            elif status == RUNTIME_ERROR:
-                rc = RC_RUNTIME_ERROR
-            # XXX improve tuning on start error handling
-        elif vlevel > 0:
-            print "Tuning skipped."
 
         if rc == RC_RUNTIME_ERROR:
             self.display_proxy_errors(fs)

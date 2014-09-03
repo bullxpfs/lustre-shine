@@ -39,6 +39,8 @@ from Shine.Commands.Base.FSEventHandler import FSGlobalEventHandler, \
 from Shine.Lustre.FileSystem import MOUNTED, RECOVERING, OFFLINE, \
                                     TARGET_ERROR, CLIENT_ERROR, RUNTIME_ERROR
 
+from Shine.Lustre.Server import Server
+
 class Mount(FSLiveCommand):
     """
     shine mount
@@ -75,36 +77,33 @@ class Mount(FSLiveCommand):
 
         rc = self.fs_status_to_rc(status)
 
-        if not self.options.remote:
-            if rc == RC_OK:
-                if vlevel > 0:
-                    key = lambda c: c.state == MOUNTED
-                    print "%s was successfully mounted on %s" % \
-                        (fs.fs_name, comps.filter(key=key).servers())
+        if rc == RC_OK:
+            if self.has_local_flag() or \
+               Server.hostname_short() in comps.servers():
+                key = lambda c: Server.hostname_short() in c.server.hostname
+                tunecomps = comps.filter(key=key)
 
-                # Apply tuning after successful mount(s)
+                # Apply tuning after successful mount
                 tuning = Tune.get_tuning(fs_conf, fs.components)
-                status = fs.tune(tuning, comps=comps)
+                status = fs.tune(tuning, comps=tunecomps)
                 if status == MOUNTED:
-                    if vlevel > 1:
-                        print "Filesystem tuning applied on %s" % \
-                                                        comps.servers()
+                    rc = RC_OK
                 elif status == TARGET_ERROR:
                     print "ERROR: Filesystem tuning failed"
                     rc = RC_RUNTIME_ERROR
                 else:
                     rc = RC_RUNTIME_ERROR
 
-            else:
-                # Display a failure message in case of previous failed
-                # mounts. For now, if one mount fail, the tuning is
-                # skipped. Use `shine tune' to manually tune the FS.
-                # Trac ticket #46 aims to improve this.
+            if rc == RC_OK:
                 if vlevel > 0:
-                    print "Tuning skipped!"
+                   key = lambda c: c.state == MOUNTED
+                   print "%s was successfully mounted on %s" % \
+                       (fs.fs_name, comps.filter(key=key).servers())
+                if vlevel > 1:
+                    print "Filesystem tuning applied on %s" % comps.servers()
 
-            if rc == RC_RUNTIME_ERROR:
-                self.display_proxy_errors(fs)
+        if rc == RC_RUNTIME_ERROR:
+            self.display_proxy_errors(fs)
 
         if hasattr(eh, 'post'):
             eh.post(fs)
