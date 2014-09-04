@@ -230,7 +230,11 @@ class Update(Command):
         oldfs.set_debug(self.options.debug)
 
         # Compare them
-        actions = oldconf._fs.compare(newfsconf)
+        key = lambda c: c.TYPE in ('mgt', 'mdt', 'ost')
+        oldservers = oldfs.components.enabled().filter(key=key).allservers()
+        newservers = newfs.components.enabled().filter(key=key).allservers()
+        actions = oldconf._fs.compare(newfsconf, servers=oldservers.union(
+                                                         newservers))
 
         # Convert Configuration objects to ComponentGroup
         # for old filesystem

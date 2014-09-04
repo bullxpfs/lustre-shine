@@ -7,6 +7,7 @@
 
 import unittest
 
+from ClusterShell.NodeSet import NodeSet
 from Utils import makeTempFile, setup_tempdirs, clean_tempdirs
 from Shine.Configuration.FileSystem import FileSystem, ModelFileIOError, ConfigDeviceNotFoundError
 from Shine.Configuration.Exceptions import ConfigException, ConfigInvalidFileSystem
@@ -284,12 +285,12 @@ class FileSystemCompareTest(unittest.TestCase):
     def tearDown(self):
         clean_tempdirs()
 
-    def _compare(self, orig, new):
+    def _compare(self, orig, new, servers=None):
         tmpfile = makeTempFile(orig)
         origconf = FileSystem(tmpfile.name)
         newfile = makeTempFile(new)
         newconf = FileSystem(newfile.name)
-        return origconf.compare(newconf)
+        return origconf.compare(newconf, servers)
 
     def test_forbidden(self):
         self.assertRaises(ConfigException, self._compare,
@@ -357,6 +358,7 @@ client: node=foo3 mount_path=/mypath2
         self.assertTrue('mount' in actions)
 
     def test_nid_change(self):
+        servers = NodeSet.fromlist(['foo1', 'foo2', 'foo3'])
         actions = self._compare(
 """fs_name: compare
 nid_map: nodes=foo[1-10] nids=foo[1-10]@tcp
@@ -365,10 +367,28 @@ mgt: node=foo1 dev=/dev/sda
 """fs_name: compare
 nid_map: nodes=foo[1-10] nids=foo[1-10]@o2ib
 mgt: node=foo1 dev=/dev/sda
-""")
+""",
+servers=servers)
         self.assertEqual(len(actions), 2)
         self.assertTrue(actions.get('copyconf', False))
         self.assertTrue(actions.get('writeconf', False))
+
+    def test_nid_change_client(self):
+        servers = NodeSet.fromlist(['foo1', 'foo2', 'foo3'])
+        actions = self._compare(
+"""fs_name: compare
+nid_map: nodes=foo[1-10] nids=foo[1-10]@tcp
+client: node=foo4
+""",
+"""fs_name: compare
+nid_map: nodes=foo[1-3,5-10] nids=foo[1-3,5-10]@tcp
+nid_map: nodes=foo4 nids=foo4@o2ib
+client: node=foo4
+""",
+servers=servers)
+        self.assertEqual(len(actions), 1)
+        self.assertTrue(actions.get('copyconf', False))
+        self.assertFalse(actions.get('writeconf', False))
 
     def test_add_ost(self):
         actions = self._compare(

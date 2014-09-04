@@ -25,6 +25,7 @@ import re
 
 from Shine.Configuration.ModelFile import ModelFile, SimpleElement, \
                                           MultipleElement, ModelFileValueError
+from Shine.Configuration.NidMap import NidMap as ConfNidMap
 
 class Model(ModelFile):
     """Represent a Shine model file.
@@ -104,12 +105,19 @@ class NidMap(ModelFile):
         self.add_element('nodes', check='string')
         self.add_element('nids',  check='string')
 
-
 class NidMaps(MultipleElement):
     """Group all 'nid_map' declarations."""
 
     def __init__(self, orig_elem=None):
         MultipleElement.__init__(self, NidMap())
+
+    def _add_nidmaps(self, nodes, nids):
+        """Commodity method to add nidmap entries"""
+        for nid in nids:
+            nidmap = NidMap()
+            nidmap.add('nodes', nodes)
+            nidmap.add('nids', nid)
+            self.elements().append(nidmap)
 
     def _expand_range(self, data):
         """
@@ -118,6 +126,33 @@ class NidMaps(MultipleElement):
         NidMaps declaration should not be expanded like target.
         """
         return iter([data])
+
+    def diff(self, other):
+        """Figure out if some nid_maps have been added/changed/removed."""
+
+        changed = self.emptycopy()
+        localdict = ConfNidMap.fromlist(self.elements()).as_dict()
+        otherdict = ConfNidMap.fromlist(other.elements()).as_dict()
+
+        # Detect new elements in other. Add them keeping order.
+        for key, elem in otherdict.items():
+            if key not in localdict:
+                changed._add_nidmaps(nodes=key, nids=elem)
+
+        # Detect missing elements in other. Add them keeping order.
+        for key, elem in localdict.items():
+            if key not in otherdict:
+                changed._add_nidmaps(nodes=key, nids=elem)
+
+        # Detect modified element in other.
+        # Add the new one from other
+        for key, elem in localdict.items():
+            if key in otherdict:
+                otherelem = otherdict[key]
+                if set(elem) != set(otherelem):
+                    changed._add_nidmaps(nodes=key, nids=elem)
+
+        return self.emptycopy(), changed, self.emptycopy()
 
 
 class Target(ModelFile):

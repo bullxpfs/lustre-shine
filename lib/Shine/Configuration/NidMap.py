@@ -54,6 +54,9 @@ class NidMap(object):
             output.append("%s -> %s\n" % (nodes, ':'.join(nids)))
         return ''.join(output)
 
+    def as_dict(self):
+        return self._map
+
     def __getitem__(self, key):
         return self._map[key]
 

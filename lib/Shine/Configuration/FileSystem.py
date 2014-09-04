@@ -21,6 +21,8 @@
 import copy
 import os
 
+from ClusterShell.NodeSet import NodeSet
+
 from Shine.Configuration.Globals import Globals
 from Shine.Configuration.Model import Model
 from Shine.Configuration.Exceptions import ConfigInvalidFileSystem, \
@@ -350,7 +352,7 @@ class FileSystem(object):
             raise ConfigInvalidFileSystem(self,
                      "You must declare both MDT and OST or neither.")
 
-    def compare(self, otherfs):
+    def compare(self, otherfs, servers=NodeSet()):
         """
         Compare the FileSystem model with another FileSystem and return
         a dictionnary describing the needed actions.
@@ -382,11 +384,15 @@ class FileSystem(object):
         if tunefskeys & anyset:
             actions['tunefs'] = True
 
-        # Need a writeconf
-        writeconfkeys = set(['nid_map'])
-        if writeconfkeys & anyset:
-            # Note: Target removal could also set this flag.
-            actions['writeconf'] = True
+        # Nidmaps have changed
+        if 'nid_map' in changed:
+            actions['copyconf'] = True
+            nodes = NodeSet.fromlist([item.get('nodes') for item
+                                      in changed.elements('nid_map')])
+
+            # Writeconf is needed only for servers nidmap change
+            if nodes.intersection(servers):
+                actions['writeconf'] = True
 
         # Need to unmount then remount clients
         remountkeys = set(['mount_options', 'mount_path'])
